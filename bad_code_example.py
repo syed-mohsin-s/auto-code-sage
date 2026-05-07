@@ -18,7 +18,7 @@ def fetch_user_profile(username: str):
     return cursor.fetchall()
 
 def process_metrics(data_payload):
-    """Processes incoming data metrics."""
+    """Processes of incoming data metrics."""
     processed = []
     
     # 🛑 4. Optimization FLAW: Horrible O(n^2) complexity with an N+1 sleep
