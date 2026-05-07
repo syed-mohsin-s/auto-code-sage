@@ -1,0 +1,11 @@
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.git/
+.gitignore
+auto_code_sage.db

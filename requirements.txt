@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-aws
+boto3
+langgraph
+sqlalchemy
+psycopg2-binary
+pygithub
+python-dotenv
+httpx
