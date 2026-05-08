@@ -2,7 +2,7 @@ import sqlite3
 import time
 
 # 🛑 1. Security FLAW: Hardcoded API Key
-AWS_SECRET_KEY = "AKIAIOSFODNN7EXAMPLE"
+AWS_SECRET_KEY = "AKIAIOSFODNN7EXAMPLEnkkfwmn"
 
 def fetch_user_profile(username: str):
     """Fetches user data from the database."""
