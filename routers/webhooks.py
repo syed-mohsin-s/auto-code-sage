@@ -1,12 +1,40 @@
-from fastapi import APIRouter, Request, BackgroundTasks, Depends
+from fastapi import APIRouter, Request, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from agent.graph import app as agent_app
 from utils.github_client import get_pr_diff, post_pr_comment
 from db.database import get_db
 from db.models import AIReviews
-from datetime import datetime
+from datetime import datetime, UTC
+import hmac
+import hashlib
+import os
 
 router = APIRouter()
+
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+
+async def verify_github_signature(request: Request):
+    """
+    Verifies the X-Hub-Signature-256 header from GitHub webhooks
+    to ensure the request is authentic and not forged.
+    """
+    if not WEBHOOK_SECRET:
+        # If no secret is configured, skip verification (dev mode)
+        return
+    
+    signature_header = request.headers.get("X-Hub-Signature-256", "")
+    if not signature_header:
+        raise HTTPException(status_code=401, detail="Missing X-Hub-Signature-256 header")
+    
+    body = await request.body()
+    expected_signature = "sha256=" + hmac.new(
+        WEBHOOK_SECRET.encode("utf-8"),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    
+    if not hmac.compare_digest(expected_signature, signature_header):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
 async def process_pr_event(payload: dict):
     """
@@ -25,8 +53,6 @@ async def process_pr_event(payload: dict):
 
         repo_full_name = payload["repository"]["full_name"]
         pr_number = pr["number"]
-        action = payload.get("action")
-        pr_id = pr.get("id")
 
         print(f"🔄 Processing PR #{pr_number} in {repo_full_name}")
 
@@ -58,7 +84,7 @@ async def process_pr_event(payload: dict):
             ai_raw_response=review_body,
             security_analysis=str(result.get("security_review", "")),
             optimization_analysis=str(result.get("optimization_review", "")),
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(UTC)
         )
         db.add(new_review)
         db.commit()
@@ -87,10 +113,19 @@ async def process_comment_event(payload: dict):
         body = comment.get("body", "").lower()
         
         feedback = None
+        rejection_reason = None
         if "!accept-sage" in body:
             feedback = "accepted"
         elif "!reject-sage" in body:
             feedback = "rejected"
+            # Extract the reason text after the !reject-sage command
+            # e.g. "!reject-sage This was a false positive on auth check"
+            original_body = comment.get("body", "")
+            reject_idx = original_body.lower().find("!reject-sage")
+            if reject_idx != -1:
+                reason_text = original_body[reject_idx + len("!reject-sage"):].strip()
+                if reason_text:
+                    rejection_reason = reason_text
             
         if feedback:
             issue = payload.get("issue", {})
@@ -108,8 +143,10 @@ async def process_comment_event(payload: dict):
             
             if review:
                 review.human_feedback = feedback
+                if rejection_reason:
+                    review.rejection_reason = rejection_reason
                 db.commit()
-                print(f"✅ Updated review ID {review.id} with feedback.")
+                print(f"✅ Updated review ID {review.id} with feedback.{' Reason: ' + rejection_reason if rejection_reason else ''}")
             else:
                 print("⚠️ No matching review found to update.")
 
@@ -120,6 +157,7 @@ async def process_comment_event(payload: dict):
 
 @router.post("/github-trigger")
 async def handle_github_webhook(request: Request, background_tasks: BackgroundTasks):
+    await verify_github_signature(request)
     payload = await request.json()
     action = payload.get("action")
     

@@ -7,9 +7,8 @@ import os
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, START, END
-from utils.context_loader import load_engineering_standards
+from utils.context_loader import load_engineering_standards, load_past_mistakes
 
 load_dotenv()
 
@@ -62,6 +61,7 @@ def analyze_security(state: AgentState):
     diff = state.get("diff", "")
 
     company_standards = load_engineering_standards()
+    past_mistakes = load_past_mistakes()
 
     prompt = f"""You are a **Senior Security Auditor** with deep expertise in application security.
 
@@ -69,6 +69,8 @@ CRITICAL CONTEXT - COMPANY ENGINEERING STANDARDS:
 <company_standards>
 {company_standards}
 </company_standards>
+
+{past_mistakes}
 
 Your task is to review the following code diff and identify ONLY security-related issues against our specific company standards and general OWASP principles.
 
@@ -130,6 +132,7 @@ def analyze_optimization(state: AgentState):
     diff = state.get("diff", "")
 
     company_standards = load_engineering_standards()
+    past_mistakes = load_past_mistakes()
 
     prompt = f"""You are a **Senior Performance Engineer** with deep expertise in software optimization.
 
@@ -137,6 +140,8 @@ CRITICAL CONTEXT - COMPANY ENGINEERING STANDARDS:
 <company_standards>
 {company_standards}
 </company_standards>
+
+{past_mistakes}
 
 Your task is to review the following code diff and identify ONLY performance and code quality issues against our specific company standards.
 
